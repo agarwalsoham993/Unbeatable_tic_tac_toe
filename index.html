@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>C++ Tic-Tac-Toe (Optimal Bot) - JS Port</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background-color: #1f1e1e; color: #eee; padding-bottom: 50px; }
+        h1 { color: #00aaff; }
+        #score { color: #9ec1d2; font-size: 1.2em; margin-bottom: 20px;}
+        #status { font-size: 1.5em; margin: 20px; height: 30px; }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            justify-content: center;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: #444;
+            border: 2px solid #555;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 4em;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .cell:hover:not(.disabled) { background-color: #555; }
+        .cell.X { color: #ff4757; }
+        .cell.O { color: #5352ed; }
+        .cell.win { background-color: #3d5e3d; }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #00aaff;
+            color: white;
+            transition: background-color 0.2s;
+        }
+        button:hover { background-color: #0088cc; }
+        .disabled { pointer-events: none; opacity: 0.7; }
+        footer { margin-top: 40px; color: #888; }
+        footer a { color: #00aaff; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>Tic-Tac-Toe Optimal Bot</h1>
+    <div id="score">Bot Wins: 0     Player Wins: 0     Draws: 0</div>
+    <div id="status">Loading...</div>
+    <div id="board"></div>
+    <button id="resetButton">New Game</button>
+
+    <footer>
+        <p>View the source code on <a id="repoLink" href="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY" target="_blank">GitHub</a>.</p>
+        <p>Original C++ logic ported to JavaScript for web deployment.</p>
+    </footer>
+
+    <script>
+        const boardElement = document.getElementById('board');
+        const statusElement = document.getElementById('status');
+        const resetButton = document.getElementById('resetButton');
+        const scoreElement = document.getElementById('score');
+
+        // Game constants
+        const EMPTY = 2;
+        const PLAYER = 1; // X
+        const BOT = 0;    // O
+
+        // Game state
+        let board = [EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY];
+        let playerStartsNext = true; // Player (X) starts the first game
+        let score = { bot: 0, player: 0, draws: 0 };
+        
+        // --- C++ Logic Ported to JavaScript ---
+
+        const WINNING_LINES = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+            [0, 4, 8], [2, 4, 6]             // diagonals
+        ];
+
+        function checkWinner(currentBoard) {
+            for (const line of WINNING_LINES) {
+                const [a, b, c] = line;
+                if (currentBoard[a] !== EMPTY && currentBoard[a] === currentBoard[b] && currentBoard[a] === currentBoard[c]) {
+                    return { winner: currentBoard[a], line: line }; // Return winner and winning line
+                }
+            }
+            if (currentBoard.every(cell => cell !== EMPTY)) {
+                return { winner: 3, line: null }; // 3 for Draw
+            }
+            return { winner: 2, line: null }; // 2 for Ongoing
+        }
+        
+        function toWin(currentBoard, player) {
+            for (let i = 0; i < 9; i++) {
+                if (currentBoard[i] === EMPTY) {
+                    const boardCopy = [...currentBoard];
+                    boardCopy[i] = player;
+                    if (checkWinner(boardCopy).winner === player) {
+                        return i;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Minimax-style recursive check to project the outcome of a move
+        function getProjectedOutcome(currentBoard, currentPlayer) {
+            const status = checkWinner(currentBoard).winner;
+            if (status !== 2) { // Game is over (win, loss, or draw)
+                return status;
+            }
+
+            // Find the best move for the *other* player
+            const nextPlayer = (currentPlayer === BOT) ? PLAYER : BOT;
+            const move = findBotMove(currentBoard, nextPlayer, false); // false to avoid recursion loop
+            
+            const boardCopy = [...currentBoard];
+            boardCopy[move] = nextPlayer;
+            
+            // Recurse to see what happens after that move
+            return getProjectedOutcome(boardCopy, nextPlayer);
+        }
+
+        function findBotMove(currentBoard, botPlayer, useMinimax = true) {
+            const humanPlayer = (botPlayer === BOT) ? PLAYER : BOT;
+            
+            // 1. If bot can win, make the winning move.
+            let move = toWin(currentBoard, botPlayer);
+            if (move !== null) return move;
+            
+            // 2. If player is about to win, block them.
+            move = toWin(currentBoard, humanPlayer);
+            if (move !== null) return move;
+
+            // 3. Try to take the center if available
+            if (currentBoard[4] === EMPTY) return 4;
+            
+            // 4. Try to take opposite corners
+            if (currentBoard[0] === humanPlayer && currentBoard[8] === EMPTY) return 8;
+            if (currentBoard[8] === humanPlayer && currentBoard[0] === EMPTY) return 0;
+            if (currentBoard[2] === humanPlayer && currentBoard[6] === EMPTY) return 6;
+            if (currentBoard[6] === humanPlayer && currentBoard[2] === EMPTY) return 2;
+            
+            // 5. Try to take any available corner
+            const corners = [0, 2, 6, 8];
+            const availableCorners = corners.filter(i => currentBoard[i] === EMPTY);
+            if (availableCorners.length > 0) {
+                 return availableCorners[Math.floor(Math.random() * availableCorners.length)];
+            }
+
+            // 6. (Advanced) Use a simplified lookahead to avoid moves that lead to a loss
+            const availableMoves = [];
+            for(let i=0; i < 9; i++) {
+                if (currentBoard[i] === EMPTY) availableMoves.push(i);
+            }
+
+            if(useMinimax) {
+                const optimalMoves = [];
+                for (const m of availableMoves) {
+                    const boardCopy = [...currentBoard];
+                    boardCopy[m] = botPlayer;
+                    // If this move doesn't result in the opponent winning, it's a good move.
+                    if (getProjectedOutcome(boardCopy, botPlayer) !== humanPlayer) {
+                        optimalMoves.push(m);
+                    }
+                }
+                 if(optimalMoves.length > 0) {
+                    return optimalMoves[Math.floor(Math.random() * optimalMoves.length)];
+                }
+            }
+
+            // 7. Fallback: Take any available move
+            if (availableMoves.length > 0) {
+                return availableMoves[Math.floor(Math.random() * availableMoves.length)];
+            }
+            return null; // Should never happen
+        }
+
+        // --- UI and Game Flow ---
+
+        function createBoard() {
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.index = i;
+                cell.addEventListener('click', () => onCellClick(i));
+                boardElement.appendChild(cell);
+            }
+        }
+
+        function onCellClick(index) {
+            if (board[index] !== EMPTY || checkWinner(board).winner !== 2) {
+                return; // Cell not empty or game is over
+            }
+
+            // Player's move
+            board[index] = PLAYER;
+            updateUI();
+
+            const gameStatus = checkWinner(board);
+            if (gameStatus.winner !== 2) {
+                endGame(gameStatus);
+                return;
+            }
+
+            // Bot's turn
+            statusElement.textContent = "Bot's Turn (O)";
+            boardElement.classList.add('disabled'); // Disable board during bot's turn
+
+            setTimeout(() => {
+                const botMove = findBotMove(board, BOT);
+                if (botMove !== null) {
+                    board[botMove] = BOT;
+                }
+                updateUI();
+                const botGameStatus = checkWinner(board);
+                if (botGameStatus.winner !== 2) {
+                    endGame(botGameStatus);
+                } else {
+                    statusElement.textContent = "Your Turn (X)";
+                    boardElement.classList.remove('disabled');
+                }
+            }, 500); // Small delay for bot move
+        }
+
+        function resetGame() {
+            board.fill(EMPTY);
+            
+            // Alternate who starts the next game
+            if (!playerStartsNext) {
+                // Bot starts
+                const firstMove = findBotMove(board, BOT);
+                board[firstMove] = BOT;
+            }
+            playerStartsNext = !playerStartsNext;
+            
+            updateUI();
+            const message = playerStartsNext ? "Bot's Turn (O)" : "Your Turn (X)";
+            statusElement.textContent = message;
+            boardElement.classList.remove('disabled');
+        }
+
+        function updateUI() {
+            board.forEach((value, index) => {
+                const cell = boardElement.children[index];
+                cell.textContent = value === PLAYER ? 'X' : value === BOT ? 'O' : '';
+                cell.classList.remove('X', 'O', 'win');
+                if (value === PLAYER) cell.classList.add('X');
+                if (value === BOT) cell.classList.add('O');
+            });
+        }
+
+        function endGame(gameStatus) {
+            let message = '';
+            if (gameStatus.winner === PLAYER) {
+                message = 'You Win! (X)';
+                score.player++;
+            } else if (gameStatus.winner === BOT) {
+                message = 'Bot Wins! (O)';
+                score.bot++;
+            } else {
+                message = "It's a Draw!";
+                score.draws++;
+            }
+            statusElement.textContent = message;
+            boardElement.classList.add('disabled');
+
+            // Highlight winning line
+            if (gameStatus.line) {
+                gameStatus.line.forEach(index => {
+                    boardElement.children[index].classList.add('win');
+                });
+            }
+            
+            updateScore();
+            saveScore();
+        }
+
+        function updateScore() {
+            scoreElement.innerHTML = `Bot Wins: ${score.bot}     Player Wins: ${score.player}     Draws: ${score.draws}`;
+        }
+
+        function saveScore() {
+            localStorage.setItem('ticTacToeScore', JSON.stringify(score));
+        }
+
+        function loadScore() {
+            const savedScore = localStorage.getItem('ticTacToeScore');
+            if (savedScore) {
+                score = JSON.parse(savedScore);
+            }
+            updateScore();
+        }
+        
+        // --- Initialization ---
+        resetButton.addEventListener('click', resetGame);
+        
+        // Initial setup
+        createBoard();
+        loadScore();
+        resetGame();
+    </script>
+</body>
+</html>
