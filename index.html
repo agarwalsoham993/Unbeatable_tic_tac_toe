@@ -34,6 +34,8 @@
         .cell.win { background-color: #3d5e3d; }
         button {
             margin-top: 20px;
+            margin-left: 10px;
+            margin-right: 10px;
             padding: 10px 20px;
             font-size: 1em;
             cursor: pointer;
@@ -44,29 +46,44 @@
             transition: background-color 0.2s;
         }
         button:hover { background-color: #0088cc; }
+        /* Style for the Min-Max button to differentiate it */
+        #minMaxButton {
+            background-color: #e056fd;
+        }
+        #minMaxButton:hover {
+            background-color: #be2edd;
+        }
         .disabled { pointer-events: none; opacity: 0.7; }
         footer { margin-top: 40px; color: #888; }
         footer a { color: #00aaff; text-decoration: none; }
         footer a:hover { text-decoration: underline; }
+        #modeDisplay { margin-top: 10px; color: #fab1a0; font-weight: bold; }
     </style>
 </head>
 <body>
     <h1>Tic-Tac-Toe Optimal Bot</h1>
     <div id="score">Bot Wins: 0     Player Wins: 0     Draws: 0</div>
     <div id="status">Loading...</div>
+    <div id="modeDisplay">Current Algorithm: Original Ported Logic</div>
     <div id="board"></div>
-    <button id="resetButton">New Game</button>
+    
+    <div>
+        <button id="resetButton">New Game</button>
+        <button id="minMaxButton">Compare with Min-Max</button>
+    </div>
 
     <footer>
         <p>View the source code on <a id="repoLink" href="https://github.com/YOUR_USERNAME/YOUR_REPOSITORY" target="_blank">GitHub</a>.</p>
-        <p>Original C++ logic ported to JavaScript for web deployment.</p>
+        <p>Original C++ logic ported to JavaScript. Min-Max added for comparison.</p>
     </footer>
 
     <script>
         const boardElement = document.getElementById('board');
         const statusElement = document.getElementById('status');
         const resetButton = document.getElementById('resetButton');
+        const minMaxButton = document.getElementById('minMaxButton');
         const scoreElement = document.getElementById('score');
+        const modeDisplay = document.getElementById('modeDisplay');
 
         // Game constants
         const EMPTY = 2;
@@ -77,16 +94,16 @@
         let board = [EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY];
         let playerStartsNext = true;
         let score = { bot: 0, player: 0, draws: 0 };
+        let useMinMax = false; // Toggle state for algorithm
         
-        // --- C++ Logic Ported to JavaScript ---
-
         const WINNING_LINES = [
             [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
             [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
             [0, 4, 8], [2, 4, 6]             // diagonals
         ];
         
-        // Corresponds to C++ check_grid
+        // --- Shared Logic ---
+
         function checkGameStatus(currentBoard) {
             for (const line of WINNING_LINES) {
                 const [a, b, c] = line;
@@ -99,8 +116,9 @@
             }
             return { status: 2, line: null }; // 2 for Ongoing
         }
+
+        // --- Original C++ Logic Ported ---
         
-        // Corresponds to C++ to_win
         function findWinningMove(currentBoard, player) {
             for (let i = 0; i < 9; i++) {
                 if (currentBoard[i] === EMPTY) {
@@ -111,17 +129,14 @@
                     }
                 }
             }
-            return null; // Equivalent to C++ 100
+            return null;
         }
         
-        // Corresponds to C++ weigh
         function weighMoves(currentBoard, weights, player) {
             const otherPlayer = (player === BOT) ? PLAYER : BOT;
             for (const line of WINNING_LINES) {
                 const values = line.map(i => currentBoard[i]);
-                // If the line is not blocked by the opponent
                 if (!values.includes(otherPlayer)) {
-                    // Increment weight for empty cells on this line
                     line.forEach(index => {
                         if (currentBoard[index] === EMPTY) {
                             weights[index]++;
@@ -131,7 +146,6 @@
             }
         }
         
-        // Corresponds to C++ return_normal_move
         function getHeuristicMove(currentBoard, player) {
             let move = findWinningMove(currentBoard, player);
             if (move !== null) return move;
@@ -162,42 +176,33 @@
                 return bestMoves[Math.floor(Math.random() * bestMoves.length)];
             }
 
-            // Fallback for empty board or no weighted moves
             const available = [];
             for(let i=0; i<9; i++) if(currentBoard[i] === EMPTY) available.push(i);
             return available[Math.floor(Math.random() * available.length)];
         }
 
-        // Corresponds to C++ final_d (recursive lookahead)
         function projectGameOutcome(currentBoard, currentPlayer) {
             const status = checkGameStatus(currentBoard).status;
             if (status !== 2) {
-                return status; // Game is over, return winner or draw
+                return status;
             }
-            
-            // Get the best move for the current player based on the simple heuristic
             const move = getHeuristicMove(currentBoard, currentPlayer);
             const boardCopy = [...currentBoard];
             boardCopy[move] = currentPlayer;
 
             const nextPlayer = (currentPlayer === BOT) ? PLAYER : BOT;
-            // Recurse
             return projectGameOutcome(boardCopy, nextPlayer);
         }
 
-        // Corresponds to C++ optimal_move
-        function findBotMove(currentBoard) {
+        function findBotMoveOriginal(currentBoard) {
             const opponent = PLAYER;
 
-            // 1. If bot can win, make the winning move.
             let move = findWinningMove(currentBoard, BOT);
             if (move !== null) return move;
             
-            // 2. If player is about to win, block them.
             move = findWinningMove(currentBoard, opponent);
             if (move !== null) return move;
 
-            // 3. Find "best" moves based on weight heuristic (from C++ logic)
             const weights = Array(9).fill(0);
             weighMoves(currentBoard, weights, BOT);
             weighMoves(currentBoard, weights, opponent);
@@ -216,12 +221,10 @@
                 }
             }
 
-            // 4. From those best moves, find one that doesn't lead to a loss using lookahead
             const safeMoves = [];
             for (const m of bestMoves) {
                 const boardCopy = [...currentBoard];
                 boardCopy[m] = BOT;
-                // If making this move does NOT result in the opponent winning in the end...
                 if (projectGameOutcome(boardCopy, opponent) !== opponent) {
                     safeMoves.push(m);
                 }
@@ -230,21 +233,77 @@
             if (safeMoves.length > 0) {
                 return safeMoves[Math.floor(Math.random() * safeMoves.length)];
             }
-            
-            // Fallback: If all "best" moves lead to a loss, just pick one of them
             if (bestMoves.length > 0) {
                  return bestMoves[Math.floor(Math.random() * bestMoves.length)];
             }
-
-            // Ultimate fallback (should not be reached in a normal game)
             const available = [];
             for(let i=0; i<9; i++) if(currentBoard[i] === EMPTY) available.push(i);
             return available[0];
         }
 
+        // --- New Min-Max Algorithm ---
+
+        function minimax(currentBoard, depth, isMaximizing) {
+            const result = checkGameStatus(currentBoard).status;
+            
+            // Terminal states
+            if (result === BOT) return 10 - depth; // Bot wins
+            if (result === PLAYER) return depth - 10; // Player wins
+            if (result === 3) return 0; // Draw
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (currentBoard[i] === EMPTY) {
+                        currentBoard[i] = BOT;
+                        let score = minimax(currentBoard, depth + 1, false);
+                        currentBoard[i] = EMPTY; // Undo move
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (currentBoard[i] === EMPTY) {
+                        currentBoard[i] = PLAYER;
+                        let score = minimax(currentBoard, depth + 1, true);
+                        currentBoard[i] = EMPTY; // Undo move
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
+            }
+        }
+
+        function findBotMoveMinMax(currentBoard) {
+            let bestScore = -Infinity;
+            let move = -1;
+            
+            // If it's the very first move of the game, pick center or corner to save computation
+            // (Minimax is fast enough for 3x3, but this is a common optimization)
+            const emptyCount = currentBoard.filter(c => c === EMPTY).length;
+            if (emptyCount === 9) return 4; // Center
+
+            for (let i = 0; i < 9; i++) {
+                if (currentBoard[i] === EMPTY) {
+                    currentBoard[i] = BOT;
+                    let score = minimax(currentBoard, 0, false);
+                    currentBoard[i] = EMPTY;
+                    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = i;
+                    }
+                }
+            }
+            return move;
+        }
+
         // --- UI and Game Flow ---
 
         function createBoard() {
+            boardElement.innerHTML = ''; // Clear existing
             for (let i = 0; i < 9; i++) {
                 const cell = document.createElement('div');
                 cell.classList.add('cell');
@@ -266,12 +325,18 @@
                 return;
             }
 
-            statusElement.textContent = "Bot's Turn (O)";
+            statusElement.textContent = `Bot Thinking (${useMinMax ? 'Min-Max' : 'Original'})...`;
             boardElement.classList.add('disabled');
 
             setTimeout(() => {
-                const botMove = findBotMove(board);
-                if (botMove !== null) {
+                let botMove;
+                if (useMinMax) {
+                    botMove = findBotMoveMinMax(board);
+                } else {
+                    botMove = findBotMoveOriginal(board);
+                }
+
+                if (botMove !== null && botMove !== -1) {
                     board[botMove] = BOT;
                 }
                 updateUI();
@@ -282,7 +347,7 @@
                     statusElement.textContent = "Your Turn (X)";
                     boardElement.classList.remove('disabled');
                 }
-            }, 500); // Small delay for bot move
+            }, 300); // Slight delay for UX
         }
 
         function resetGame() {
@@ -290,7 +355,13 @@
             
             playerStartsNext = !playerStartsNext;
             if (!playerStartsNext) { // Bot starts
-                const firstMove = findBotMove(board);
+                // Bot move based on selected algorithm
+                let firstMove;
+                if (useMinMax) {
+                     firstMove = findBotMoveMinMax(board);
+                } else {
+                     firstMove = findBotMoveOriginal(board);
+                }
                 board[firstMove] = BOT;
                 statusElement.textContent = "Your Turn (X)";
             } else { // Player starts
@@ -299,6 +370,19 @@
             
             updateUI();
             boardElement.classList.remove('disabled');
+        }
+
+        function toggleAlgorithm() {
+            useMinMax = !useMinMax;
+            if (useMinMax) {
+                modeDisplay.textContent = "Current Algorithm: Min-Max (Unbeatable)";
+                minMaxButton.textContent = "Switch back to Original";
+            } else {
+                modeDisplay.textContent = "Current Algorithm: Original Ported Logic";
+                minMaxButton.textContent = "Compare with Min-Max";
+            }
+            // Optional: Auto-reset game on switch to ensure fair start?
+            // User can just press New Game manually.
         }
 
         function updateUI() {
@@ -354,6 +438,7 @@
         
         // --- Initialization ---
         resetButton.addEventListener('click', resetGame);
+        minMaxButton.addEventListener('click', toggleAlgorithm);
         
         createBoard();
         loadScore();
